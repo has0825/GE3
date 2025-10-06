@@ -11,7 +11,8 @@
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
-
+#pragma comment(lib, "d3d12.lib")
+#pragma comment(lib, "dxgi.lib")
 #include <vector>
 
 //==============================================================================================
@@ -136,22 +137,25 @@ void MyGame::Update() {
 }
 
 void MyGame::Draw() {
-    ID3D12GraphicsCommandList* commandList = dxCore_->GetCommandList();
-
     dxCore_->PreDraw();
 
+    ID3D12GraphicsCommandList* commandList = dxCore_->GetCommandList();
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->SetPipelineState(graphicsPipelineState_.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     commandList->IASetVertexBuffers(0, 1, &sphereVertexBufferView_);
+
+    // ★★★ 命令の順番を修正 ★★★
+    // 先にディスクリプタヒープとテーブルを設定する
+    ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap_.Get() };
+    commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+    commandList->SetGraphicsRootDescriptorTable(2, srvDescriptorHeap_->GetGPUDescriptorHandleForHeapStart());
+
+    // その後に定数バッファを設定する
     commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(1, wvpResource_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource_->GetGPUVirtualAddress());
-
-    ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap_.Get() };
-    commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = srvDescriptorHeap_->GetGPUDescriptorHandleForHeapStart();
-    commandList->SetGraphicsRootDescriptorTable(2, srvHandle);
+    // ★★★ ここまで変更 ★★★
 
     commandList->DrawInstanced(kNumSphereVertices, 1, 0, 0);
 
@@ -167,7 +171,12 @@ void MyGame::InitializeImGui() {
     ImGui::StyleColorsDark();
     ImGui_ImplWin32_Init(winApp_->GetHwnd());
 
-    srvDescriptorHeap_ = dxCore_->CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
+    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+    desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    desc.NumDescriptors = 1;
+    desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    HRESULT hr = dxCore_->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&srvDescriptorHeap_));
+    assert(SUCCEEDED(hr));
 
     D3D12_CPU_DESCRIPTOR_HANDLE srvHandleCPU = srvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandleGPU = srvDescriptorHeap_->GetGPUDescriptorHandleForHeapStart();
@@ -180,22 +189,26 @@ void MyGame::InitializeGraphicsPipeline() {
     descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
-    descriptorRange[0].BaseShaderRegister = 0;
+    descriptorRange[0].BaseShaderRegister = 0; // t0
     descriptorRange[0].NumDescriptors = 1;
     descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
     D3D12_ROOT_PARAMETER rootParameters[4] = {};
+    // material(b0) for Pixel Shader
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].Descriptor.ShaderRegister = 0;
+    // wvp(b0) for Vertex Shader
     rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
     rootParameters[1].Descriptor.ShaderRegister = 0;
+    // texture(t0) for Pixel Shader
     rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange;
     rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange);
+    // light(b1) for Pixel Shader
     rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[3].Descriptor.ShaderRegister = 1;
@@ -210,7 +223,7 @@ void MyGame::InitializeGraphicsPipeline() {
     staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
     staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
-    staticSamplers[0].ShaderRegister = 0;
+    staticSamplers[0].ShaderRegister = 0; // s0
     staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     descriptionRootSignature.pStaticSamplers = staticSamplers;
     descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
@@ -247,12 +260,13 @@ void MyGame::InitializeGraphicsPipeline() {
     graphicsPipelineStateDesc.pRootSignature = rootSignature_.Get();
     graphicsPipelineStateDesc.InputLayout = inputLayoutDesc;
 
+    // シェーダーファイル名はご自身の環境に合わせてください (ObjVS.hlsl or Object3d.VS.hlsl)
     auto vsBlob = shaderCompiler_->Compile(L"resources/shaders/Object3d.VS.hlsl", L"vs_6_0");
     auto psBlob = shaderCompiler_->Compile(L"resources/shaders/Object3d.PS.hlsl", L"ps_6_0");
     graphicsPipelineStateDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
     graphicsPipelineStateDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
 
-    graphicsPipelineStateDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+    graphicsPipelineStateDesc.BlendState = CD3D12_BLEND_DESC(D3D12_DEFAULT);
     graphicsPipelineStateDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 
     graphicsPipelineStateDesc.NumRenderTargets = 1;
