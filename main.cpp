@@ -144,18 +144,14 @@ void MyGame::Draw() {
     commandList->SetPipelineState(graphicsPipelineState_.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     commandList->IASetVertexBuffers(0, 1, &sphereVertexBufferView_);
-
-    // ★★★ 命令の順番を修正 ★★★
-    // 先にディスクリプタヒープとテーブルを設定する
-    ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap_.Get() };
-    commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
-    commandList->SetGraphicsRootDescriptorTable(2, srvDescriptorHeap_->GetGPUDescriptorHandleForHeapStart());
-
-    // その後に定数バッファを設定する
     commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(1, wvpResource_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource_->GetGPUVirtualAddress());
-    // ★★★ ここまで変更 ★★★
+
+    ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap_.Get() };
+    commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = srvDescriptorHeap_->GetGPUDescriptorHandleForHeapStart();
+    commandList->SetGraphicsRootDescriptorTable(2, srvHandle);
 
     commandList->DrawInstanced(kNumSphereVertices, 1, 0, 0);
 
@@ -177,7 +173,7 @@ void MyGame::InitializeImGui() {
     desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     HRESULT hr = dxCore_->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&srvDescriptorHeap_));
     assert(SUCCEEDED(hr));
-
+    
     D3D12_CPU_DESCRIPTOR_HANDLE srvHandleCPU = srvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandleGPU = srvDescriptorHeap_->GetGPUDescriptorHandleForHeapStart();
 
@@ -260,13 +256,12 @@ void MyGame::InitializeGraphicsPipeline() {
     graphicsPipelineStateDesc.pRootSignature = rootSignature_.Get();
     graphicsPipelineStateDesc.InputLayout = inputLayoutDesc;
 
-    // シェーダーファイル名はご自身の環境に合わせてください (ObjVS.hlsl or Object3d.VS.hlsl)
-    auto vsBlob = shaderCompiler_->Compile(L"resources/shaders/Object3d.VS.hlsl", L"vs_6_0");
-    auto psBlob = shaderCompiler_->Compile(L"resources/shaders/Object3d.PS.hlsl", L"ps_6_0");
+    auto vsBlob = shaderCompiler_->Compile(L"Object3d.VS.hlsl", L"vs_6_0");
+    auto psBlob = shaderCompiler_->Compile(L"Object3d.PS.hlsl", L"ps_6_0");
     graphicsPipelineStateDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
     graphicsPipelineStateDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
 
-    graphicsPipelineStateDesc.BlendState = CD3D12_BLEND_DESC(D3D12_DEFAULT);
+    graphicsPipelineStateDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     graphicsPipelineStateDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 
     graphicsPipelineStateDesc.NumRenderTargets = 1;
