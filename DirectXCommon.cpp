@@ -1,24 +1,19 @@
 #include "DirectXCommon.h"
-#include "WinApp.h" // WinAppのヘッダーをインクルード
+#include "WinApp.h"
+#include "D3D12Util.h" 
 #include <cassert>
 #include <format>
 #include <string>
+#include <fstream>
+#include <vector>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "dxguid.lib")
 
-// 外部で定義された関数のプロトタイプ宣言
+// main.cppで定義されている関数のプロトタイプ宣言
 std::string ConvertString(const std::wstring& str);
 void Log(std::ostream& os, const std::string& message);
-Microsoft::WRL::ComPtr<ID3D12Resource>
-CreateDepthStencilTextureResource(Microsoft::WRL::ComPtr<ID3D12Device> device,
-    int32_t width, int32_t height);
-Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>
-CreateDescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device> device,
-    D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors,
-    bool shaderVisivle);
-
 
 DirectXCommon* DirectXCommon::GetInstance() {
     static DirectXCommon instance;
@@ -165,7 +160,7 @@ void DirectXCommon::CreateDevice() {
         hr = useAdapter->GetDesc3(&adapterDesc);
         assert(SUCCEEDED(hr));
         if (!(adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) {
-            // ログは省略
+            // ログは省略 (本来はmainのlogStreamに書き込む)
             break;
         }
     }
@@ -175,7 +170,7 @@ void DirectXCommon::CreateDevice() {
     for (size_t i = 0; i < _countof(featureLevels); ++i) {
         hr = D3D12CreateDevice(useAdapter.Get(), featureLevels[i], IID_PPV_ARGS(&device_));
         if (SUCCEEDED(hr)) {
-            // ログは省略
+            // ログは省略 (本来はmainのlogStreamに書き込む)
             break;
         }
     }
@@ -209,7 +204,7 @@ void DirectXCommon::CreateSwapChain(WinApp* winApp) {
 }
 
 void DirectXCommon::CreateRenderTarget() {
-    rtvDescriptorHeap_ = CreateDescriptorHeap(device_, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, kBackBufferCount_, false);
+    rtvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, kBackBufferCount_, false);
 
     rtvDesc_.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     rtvDesc_.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
@@ -227,9 +222,9 @@ void DirectXCommon::CreateRenderTarget() {
 }
 
 void DirectXCommon::CreateDepthBuffer(WinApp* winApp) {
-    depthStencilResource_ = CreateDepthStencilTextureResource(device_, winApp->kClientWidth, winApp->kClientHeight);
+    depthStencilResource_ = CreateDepthStencilTextureResource(device_.Get(), winApp->kClientWidth, winApp->kClientHeight);
 
-    dsvDescriptorHeap_ = CreateDescriptorHeap(device_, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, false);
+    dsvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, false);
 
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
     dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
