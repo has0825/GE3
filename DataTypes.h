@@ -1,8 +1,8 @@
 #pragma once
-#include "MathTypes.h"
+#include "engine/Math/MathTypes.h"
 #include <string>
 #include <vector>
-
+#include <cstdint>
 // 頂点データ
 struct VertexData {
 	Vector4 position;
