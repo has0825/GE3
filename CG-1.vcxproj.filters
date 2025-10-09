@@ -16,6 +16,24 @@
     <Filter Include="imgui">
       <UniqueIdentifier>{a97b0c91-ccd7-43d3-aa15-079faef7f3df}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\Basic functions">
+      <UniqueIdentifier>{f7d01930-e3fd-4338-a0d0-dfb72deb1081}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\D3D12Util">
+      <UniqueIdentifier>{50a38056-5799-45d8-9497-ef13bea0e8ff}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\Math">
+      <UniqueIdentifier>{60d21faa-7da0-40b4-a776-30d27e88268b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\Model">
+      <UniqueIdentifier>{ba34a75d-ecfe-41a3-a450-3e3a2b44098b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\Pipeline state">
+      <UniqueIdentifier>{e202a63a-8fb1-4a01-b4f1-d27e800d73c1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\Window">
+      <UniqueIdentifier>{e50f38f7-cf4b-49c7-ba7d-0a7e69f12a43}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -42,23 +60,23 @@
     <ClCompile Include="externals\imgui\imgui_widgets.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
-    <ClCompile Include="engine\window\WinApp.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
     <ClCompile Include="engine\Basic functions\DirectXCommon.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="engine\Pipeline state\GraphicsPipeline.cpp">
-      <Filter>ソース ファイル</Filter>
+      <Filter>ソース ファイル\Basic functions</Filter>
     </ClCompile>
     <ClCompile Include="engine\D3D12Util\D3D12Util.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="engine\Model\Model.cpp">
-      <Filter>ソース ファイル</Filter>
+      <Filter>ソース ファイル\D3D12Util</Filter>
     </ClCompile>
     <ClCompile Include="engine\Math\MathUtil.cpp">
-      <Filter>ソース ファイル</Filter>
+      <Filter>ソース ファイル\Math</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\Model\Model.cpp">
+      <Filter>ソース ファイル\Model</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\Pipeline state\GraphicsPipeline.cpp">
+      <Filter>ソース ファイル\Pipeline state</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\window\WinApp.cpp">
+      <Filter>ソース ファイル\Window</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -90,29 +108,29 @@
     <ClInclude Include="externals\imgui\imstb_truetype.h">
       <Filter>imgui</Filter>
     </ClInclude>
-    <ClInclude Include="engine\window\WinApp.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="engine\Basic functions\DirectXCommon.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="engine\Pipeline state\GraphicsPipeline.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="engine\D3D12Util\D3D12Util.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="engine\Model\Model.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="engine\Math\MathTypes.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
     <ClInclude Include="DataTypes.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="engine\Basic functions\DirectXCommon.h">
+      <Filter>ソース ファイル\Basic functions</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\D3D12Util\D3D12Util.h">
+      <Filter>ソース ファイル\D3D12Util</Filter>
+    </ClInclude>
     <ClInclude Include="engine\Math\MathUtil.h">
-      <Filter>ヘッダー ファイル</Filter>
+      <Filter>ソース ファイル\Math</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\Math\MathTypes.h">
+      <Filter>ソース ファイル\Math</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\Model\Model.h">
+      <Filter>ソース ファイル\Model</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\Pipeline state\GraphicsPipeline.h">
+      <Filter>ソース ファイル\Pipeline state</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\window\WinApp.h">
+      <Filter>ソース ファイル\Window</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
