@@ -8,7 +8,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <wrl.h>
+#include <wrl/client.h>
 #include <Windows.h>
 #include <objbase.h>
 #include <d3d12.h>
@@ -38,7 +38,17 @@
 #include "MathUtil.h"
 #include "DataTypes.h"
 
-// === このファイルに残っているヘルパー関数 ===
+// HLSLと一致させるためのインスタンスデータ構造体
+struct InstancingData {
+	Matrix4x4 WVP;
+	Matrix4x4 World;
+};
+
+// Vector3の足し算を行うヘルパー関数
+Vector3 Add(const Vector3& v1, const Vector3& v2) {
+	return { v1.x + v2.x, v1.y + v2.y, v1.z + v2.z };
+}
+
 static LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
 {
 	SYSTEMTIME time;
@@ -119,12 +129,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	ID3D12GraphicsCommandList* commandList = dxCommon->GetCommandList();
 
-	Model* model = Model::Create("resources", "Plane.obj", device);
+	Model* planeModel = Model::Create("resources", "Plane.obj", device);
 
-	Model* fenceModel = Model::Create("resources/fence", "fence.obj", device);
-	fenceModel->transform.translate = { 0.0f, 0.0f, 20.0f };
-	fenceModel->transform.scale = { 10.0f, 10.0f, 10.0f };
-	fenceModel->transform.rotate = { 0.0f, (float)M_PI, 0.0f };
+	const UINT kNumInstances = 10;
+	// === 変更点 1: Offset per Instance x の初期値を -0.140f に設定 ===
+	Vector3 instanceOffset = { -0.140f, 0.1f, 0.0f };
+	Vector3 basePosition = { 0.0f, 0.0f, 0.0f };
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource = CreateBufferResource(device, sizeof(InstancingData) * kNumInstances);
+	InstancingData* instancingData = nullptr;
+	instancingResource->Map(0, nullptr, reinterpret_cast<void**>(&instancingData));
 
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap = CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
 
@@ -133,17 +147,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource = CreateTextureResource(device, metadata);
 	Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource = UploadTextureData(textureResource.Get(), mipImages, device, commandList);
 
-	std::string planeTexturePath = "resources/monsterBall.png";
-	DirectX::ScratchImage mipImages2 = LoadTexture(planeTexturePath);
+	std::string otherTexturePath = "resources/monsterBall.png";
+	DirectX::ScratchImage mipImages2 = LoadTexture(otherTexturePath);
 	const DirectX::TexMetadata& metadata2 = mipImages2.GetMetadata();
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource2 = CreateTextureResource(device, metadata2);
 	Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource2 = UploadTextureData(textureResource2.Get(), mipImages2, device, commandList);
-
-	std::string fenceTexturePath = "resources/fence/fence.png";
-	DirectX::ScratchImage mipImagesFence = LoadTexture(fenceTexturePath);
-	const DirectX::TexMetadata& metadataFence = mipImagesFence.GetMetadata();
-	Microsoft::WRL::ComPtr<ID3D12Resource> textureResourceFence = CreateTextureResource(device, metadataFence);
-	Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResourceFence = UploadTextureData(textureResourceFence.Get(), mipImagesFence, device, commandList);
 
 	const uint32_t descriptorSizeSRV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
@@ -163,50 +171,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	device->CreateShaderResourceView(textureResource.Get(), &srvDesc, textureSrvHandleCPU);
 	device->CreateShaderResourceView(textureResource2.Get(), &srvDesc2, textureSrvHandleCPU2);
 
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDescFence{};
-	srvDescFence.Format = metadataFence.format;
-	srvDescFence.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDescFence.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	srvDescFence.Texture2D.MipLevels = UINT(metadataFence.mipLevels);
-	D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPUFence = GetCPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 3);
-	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPUFence = GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 3);
-	device->CreateShaderResourceView(textureResourceFence.Get(), &srvDescFence, textureSrvHandleCPUFence);
-
-
-	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResourceSprite = CreateBufferResource(device, sizeof(VertexData) * 4);
-	VertexData* vertexDataSprite = nullptr;
-	vertexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&vertexDataSprite));
-	vertexDataSprite[0].position = { 0.0f, 360.0f, 0.0f, 1.0f };
-	vertexDataSprite[0].texcoord = { 0.0f, 1.0f };
-	vertexDataSprite[1].position = { 0.0f, 0.0f, 0.0f, 1.0f };
-	vertexDataSprite[1].texcoord = { 0.0f, 0.0f };
-	vertexDataSprite[2].position = { 640.0f, 360.0f, 0.0f, 1.0f };
-	vertexDataSprite[2].texcoord = { 1.0f, 1.0f };
-	vertexDataSprite[3].position = { 640.0f, 0.0f, 0.0f, 1.0f };
-	vertexDataSprite[3].texcoord = { 1.0f, 0.0f };
-	D3D12_VERTEX_BUFFER_VIEW vertexBufferViewSprite{};
-	vertexBufferViewSprite.BufferLocation = vertexResourceSprite->GetGPUVirtualAddress();
-	vertexBufferViewSprite.SizeInBytes = sizeof(VertexData) * 4;
-	vertexBufferViewSprite.StrideInBytes = sizeof(VertexData);
-	Microsoft::WRL::ComPtr<ID3D12Resource> indexResourceSprite = CreateBufferResource(device, sizeof(uint32_t) * 6);
-	uint32_t* indexDataSprite = nullptr;
-	indexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&indexDataSprite));
-	indexDataSprite[0] = 0; indexDataSprite[1] = 1; indexDataSprite[2] = 2;
-	indexDataSprite[3] = 1; indexDataSprite[4] = 3; indexDataSprite[5] = 2;
-	D3D12_INDEX_BUFFER_VIEW indexBufferViewSprite{};
-	indexBufferViewSprite.BufferLocation = indexResourceSprite->GetGPUVirtualAddress();
-	indexBufferViewSprite.SizeInBytes = sizeof(uint32_t) * 6;
-	indexBufferViewSprite.Format = DXGI_FORMAT_R32_UINT;
-
-	Microsoft::WRL::ComPtr<ID3D12Resource> materialResourceSprite = CreateBufferResource(device, sizeof(Material));
-	Material* materialDataSprite = nullptr;
-	materialResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&materialDataSprite));
-	materialDataSprite->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-	materialDataSprite->uvTransform = MakeIdentity4x4();
-	materialDataSprite->enableLighting = false;
-	Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResourceSprite = CreateBufferResource(device, sizeof(TransformationMatrix));
-	TransformationMatrix* transformationMatrixDataSprite = nullptr;
-	transformationMatrixResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixDataSprite));
 	Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource = CreateBufferResource(device, sizeof(DirectionalLight));
 	DirectionalLight* directionalLightData = nullptr;
 	directionalLightResource->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData));
@@ -217,11 +181,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	CameraForGpu* cameraForGpuData = nullptr;
 	cameraForGpuResource->Map(0, nullptr, reinterpret_cast<void**>(&cameraForGpuData));
 
-	Transform cameraTransform{ { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -15.0f } };
-	Transform transformSprite{ { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
-	Transform uvTransformSprite{ { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
-	bool useMonstarBall = true;
-	int spriteBlendMode = kBlendModeNormal;
+	Transform cameraTransform{ { 1.0f, 1.0f, 1.0f }, { 0.2f, 0.0f, 0.0f }, { 0.0f, 5.0f, -15.0f } };
+	// === 変更点 2: Plane Rotate Y の初期値を -180度 (-PIラジアン) に設定 ===
+	Transform globalPlaneTransform{ { 1.0f, 1.0f, 1.0f }, { 0.0f, -static_cast<float>(M_PI), 0.0f }, { 0.0f, 0.0f, 0.0f } };
+	bool useDefaultTexture = true;
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -239,47 +202,62 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		ImGui_ImplWin32_NewFrame();
 		ImGui::NewFrame();
 		ImGui::ShowDemoWindow();
-		ImGui::Begin("Controls");
-		ImGui::SliderFloat3("Scale", &model->transform.scale.x, 0.1f, 50.0f);
-		ImGui::SliderAngle("RotateX", &model->transform.rotate.x, -360.0f, 360.0f);
-		ImGui::SliderAngle("RotateY", &model->transform.rotate.y, -360.0f, 360.0f);
-		ImGui::SliderAngle("RotateZ", &model->transform.rotate.z, -360.0f, 360.0f);
-		ImGui::SliderFloat3("Translate", &model->transform.translate.x, -50.0f, 50.0f);
+		ImGui::Begin("Settings");
 
-		ImGui::Checkbox("useMonstarBall", &useMonstarBall);
+		ImGui::Checkbox("Use uvChecker Texture", &useDefaultTexture);
 		ImGui::SliderFloat3("Light Direction", &directionalLightData->direction.x, -1.0f, 1.0f);
-		ImGui::Text("UVTransform");
-		ImGui::ColorEdit4("Sprite Color", &materialDataSprite->color.x);
-		const char* blendModeItems[] = { "None", "Normal", "Add", "Subtract", "Multiply" };
-		ImGui::Combo("Sprite BlendMode", &spriteBlendMode, blendModeItems, IM_ARRAYSIZE(blendModeItems));
-		ImGui::DragFloat2("UVTranslate", &uvTransformSprite.translate.x, 0.01f, -10.0f, 10.0f);
-		ImGui::DragFloat2("UVScale", &uvTransformSprite.scale.x, 0.01f, -10.0f, 10.0f);
-		ImGui::SliderAngle("UVRotate", &uvTransformSprite.rotate.z);
-		ImGui::SliderFloat3("TranslateSprite", &transformSprite.translate.x, 0.0f, WinApp::kClientWidth);
+
 		ImGui::Separator();
-		ImGui::Text("Fence Model");
-		ImGui::SliderFloat3("Fence Translate", &fenceModel->transform.translate.x, -70.0f, 70.0f);
-		ImGui::SliderFloat3("Fence Scale", &fenceModel->transform.scale.x, 0.1f, 70.0f);
-		ImGui::SliderAngle("Fence RotateX", &fenceModel->transform.rotate.x, -360.0f, 360.0f);
-		ImGui::SliderAngle("Fence RotateY", &fenceModel->transform.rotate.y, -360.0f, 360.0f);
-		ImGui::SliderAngle("Fence RotateZ", &fenceModel->transform.rotate.z, -360.0f, 360.0f);
+		ImGui::Text("Camera");
+		ImGui::DragFloat3("Camera Translate", &cameraTransform.translate.x, 0.1f);
+		ImGui::DragFloat3("Camera Rotate", &cameraTransform.rotate.x, 0.01f);
+
+		ImGui::Separator();
+		ImGui::Text("Global Plane Controls");
+		ImGui::DragFloat3("Global Translate", &globalPlaneTransform.translate.x, 0.1f, -10.0f, 10.0f);
+		ImGui::SliderFloat3("Plane Scale", &globalPlaneTransform.scale.x, 0.1f, 5.0f);
+		ImGui::SliderAngle("Plane Rotate X", &globalPlaneTransform.rotate.x, -180.0f, 180.0f);
+		ImGui::SliderAngle("Plane Rotate Y", &globalPlaneTransform.rotate.y, -180.0f, 180.0f);
+		ImGui::SliderAngle("Plane Rotate Z", &globalPlaneTransform.rotate.z, -180.0f, 180.0f);
+
+		ImGui::Separator();
+		ImGui::Text("Instance Stacking Offset");
+		ImGui::DragFloat3("Offset per Instance", &instanceOffset.x, 0.01f, -1.0f, 1.0f);
+		ImGui::DragFloat3("Base Position", &basePosition.x, 0.1f, -10.0f, 10.0f);
+
 		ImGui::End();
 		ImGui::Render();
 
 		Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
 		Matrix4x4 viewMatrix = Inverse(cameraMatrix);
-		Matrix4x4 projectionMatrix = MakePerspectiveFovMatrix(0.45f, (float)WinApp::kClientWidth / (float)WinApp::kClientHeight, 0.1f, 100.0f);
+		Matrix4x4 projectionMatrix = MakePerspectiveFovMatrix(0.45f, (float)winApp->kClientWidth / (float)winApp->kClientHeight, 0.1f, 100.0f);
 		Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
 
 		cameraForGpuData->worldPosition = cameraTransform.translate;
 
-		Matrix4x4 worldMatrixSprite = MakeAffineMatrix(transformSprite.scale, transformSprite.rotate, transformSprite.translate);
-		Matrix4x4 viewMatrixSprite = MakeIdentity4x4();
-		Matrix4x4 projectionMatrixSprite = MakeOrthographicMatrix(0.0f, 0.0f, (float)WinApp::kClientWidth, (float)WinApp::kClientHeight, 0.0f, 100.0f);
-		transformationMatrixDataSprite->WVP = Multiply(worldMatrixSprite, Multiply(viewMatrixSprite, projectionMatrixSprite));
-		transformationMatrixDataSprite->World = worldMatrixSprite;
-		Matrix4x4 uvTransformMatrix = MakeAffineMatrix(uvTransformSprite.scale, uvTransformSprite.rotate, uvTransformSprite.translate);
-		materialDataSprite->uvTransform = uvTransformMatrix;
+		for (UINT i = 0; i < kNumInstances; ++i) {
+
+			Vector3 currentInstanceOffset = {
+				instanceOffset.x * static_cast<float>(i),
+				instanceOffset.y * static_cast<float>(i),
+				instanceOffset.z * static_cast<float>(i)
+			};
+
+			Transform transform;
+			transform.translate = Add(Add(basePosition, currentInstanceOffset), globalPlaneTransform.translate);
+
+			// Planeを正面に向ける回転は不要なので削除
+			Vector3 baseRotation = { 0.0f, 0.0f, 0.0f };
+			transform.rotate = Add(baseRotation, globalPlaneTransform.rotate);
+
+			transform.scale = globalPlaneTransform.scale;
+
+			Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
+
+			instancingData[i].World = worldMatrix;
+			instancingData[i].WVP = Multiply(worldMatrix, viewProjectionMatrix);
+		}
+
 		directionalLightData->direction = Normalize(directionalLightData->direction);
 
 		dxCommon->PreDraw();
@@ -292,30 +270,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress());
 		commandList->SetGraphicsRootConstantBufferView(4, cameraForGpuResource->GetGPUVirtualAddress());
 
-		// Planeモデルを描画 (ブレンドなし)
 		commandList->SetPipelineState(graphicsPipeline->GetPipelineState(kBlendModeNone));
-		model->Draw(
-			commandList,
-			viewProjectionMatrix,
-			directionalLightResource->GetGPUVirtualAddress(),
-			useMonstarBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
 
-		// Fenceモデルを描画 (アルファクリッピング)
-		commandList->SetPipelineState(graphicsPipeline->GetPipelineState(kBlendModeAlphaClip));
-		fenceModel->Draw(
+		planeModel->Draw(
 			commandList,
-			viewProjectionMatrix,
+			kNumInstances,
 			directionalLightResource->GetGPUVirtualAddress(),
-			textureSrvHandleGPUFence);
-
-		// スプライトを描画
-		commandList->SetPipelineState(graphicsPipeline->GetPipelineState(static_cast<BlendMode>(spriteBlendMode)));
-		commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
-		commandList->IASetIndexBuffer(&indexBufferViewSprite);
-		commandList->SetGraphicsRootConstantBufferView(0, materialResourceSprite->GetGPUVirtualAddress());
-		commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
-		commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
-		commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+			useDefaultTexture ? textureSrvHandleGPU : textureSrvHandleGPU2,
+			instancingResource->GetGPUVirtualAddress());
 
 		ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
 
@@ -326,8 +288,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 
-	delete model;
-	delete fenceModel;
+	delete planeModel;
+
 	delete graphicsPipeline;
 
 	dxCommon->Finalize();

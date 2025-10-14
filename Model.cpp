@@ -5,7 +5,7 @@
 #include <fstream>
 #include <sstream>
 
-// === このファイル内でのみ使用するヘルパー関数 ===
+// ヘルパー関数のプロトタイプ宣言
 MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename);
 ModelData LoadOjFile(const std::string& directoryPath, const std::string& filename);
 
@@ -47,6 +47,7 @@ void Model::Update() {
 	// 将来的なアニメーション更新などで使用
 }
 
+// 通常描画用のDraw関数
 void Model::Draw(
 	ID3D12GraphicsCommandList* commandList,
 	const Matrix4x4& viewProjectionMatrix,
@@ -66,8 +67,28 @@ void Model::Draw(
 	commandList->DrawInstanced(UINT(vertices_.size()), 1, 0, 0);
 }
 
+// インスタンシング描画用のDraw関数
+void Model::Draw(
+	ID3D12GraphicsCommandList* commandList,
+	UINT instanceCount,
+	D3D12_GPU_VIRTUAL_ADDRESS lightGpuAddress,
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle,
+	D3D12_GPU_VIRTUAL_ADDRESS instancingSrvAddress) {
 
-// === このファイル内でのみ使用するヘルパー関数 ===
+	commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
+	commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
+	// Param[1] (WVP) はインスタンスバッファから渡されるため、ここでは設定しない
+	commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandle);
+	commandList->SetGraphicsRootConstantBufferView(3, lightGpuAddress);
+	// Param[5] にインスタンスバッファのSRVを設定
+	commandList->SetGraphicsRootShaderResourceView(5, instancingSrvAddress);
+
+	// 指定された数のインスタンスを描画
+	commandList->DrawInstanced(UINT(vertices_.size()), instanceCount, 0, 0);
+}
+
+
+// === ヘルパー関数の実装 (変更なし) ===
 MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename)
 {
 	MaterialData materialData;

@@ -13,7 +13,7 @@ enum BlendMode {
     kBlendModeAdd,        // 加算
     kBlendModeSubtract,   // 減算
     kBlendModeMultiply,   // 乗算
-    kBlendModeAlphaClip,  // === 追加: アルファクリッピング用 ===
+    kBlendModeAlphaClip,  // アルファクリッピング用
     kCountOfBlendMode,    // カウント用
 };
 

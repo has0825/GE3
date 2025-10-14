@@ -12,11 +12,20 @@ public:
 
     void Update();
 
+    // 通常描画用のDraw関数
     void Draw(
         ID3D12GraphicsCommandList* commandList,
         const Matrix4x4& viewProjectionMatrix,
         D3D12_GPU_VIRTUAL_ADDRESS lightGpuAddress,
         D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle);
+
+    // インスタンシング描画用のDraw関数
+    void Draw(
+        ID3D12GraphicsCommandList* commandList,
+        UINT instanceCount,
+        D3D12_GPU_VIRTUAL_ADDRESS lightGpuAddress,
+        D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle,
+        D3D12_GPU_VIRTUAL_ADDRESS instancingSrvAddress);
 
 public:
     Transform transform;

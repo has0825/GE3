@@ -38,14 +38,14 @@ void GraphicsPipeline::Initialize(ID3D12Device* device) {
     descriptionRootSignature.pStaticSamplers = staticSamplers;
     descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
 
-    D3D12_ROOT_PARAMETER rootParameters[5] = {};
+    D3D12_ROOT_PARAMETER rootParameters[6] = {}; // サイズを6に変更
 
     // Param [0]: Material (PS, b0)
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].Descriptor.ShaderRegister = 0;
 
-    // Param [1]: WVP/World (VS, b0)
+    // Param [1]: WVP/World (VS, b0) - 通常描画用
     rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
     rootParameters[1].Descriptor.ShaderRegister = 0;
@@ -71,8 +71,13 @@ void GraphicsPipeline::Initialize(ID3D12Device* device) {
     rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[4].Descriptor.ShaderRegister = 2;
 
+    // Param [5]: Instancing Buffer (VS, t1) - インスタンシング用
+    rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[5].Descriptor.ShaderRegister = 1; // t1レジスタ
+
     descriptionRootSignature.pParameters = rootParameters;
-    descriptionRootSignature.NumParameters = _countof(rootParameters);
+    descriptionRootSignature.NumParameters = _countof(rootParameters); // サイズを6にしているのでOK
 
     Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
     Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
@@ -84,8 +89,7 @@ void GraphicsPipeline::Initialize(ID3D12Device* device) {
     hr = device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
     assert(SUCCEEDED(hr));
 
-    // --- PSOの作成 ---
-    // シェーダーやインプットレイアウトなど、全PSOで共通の設定
+    // ... (以降のPSO作成部分は変更なし) ...
     Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"Object3d.VS.hlsl", L"vs_6_0", dxcUtils.Get(), dxcCompiler.Get(), includeHandler.Get());
     assert(vertexShaderBlob != nullptr);
     Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"Object3d.PS.hlsl", L"ps_6_0", dxcUtils.Get(), dxcCompiler.Get(), includeHandler.Get());
@@ -118,18 +122,15 @@ void GraphicsPipeline::Initialize(ID3D12Device* device) {
     depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
     depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 
-    // ブレンドモードごとにPSOを生成する
     for (int i = 0; i < kCountOfBlendMode; ++i) {
         D3D12_BLEND_DESC blendDesc{};
         blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
         switch (static_cast<BlendMode>(i)) {
         case kBlendModeNone:
-            // ブレンドなし (ソースをそのまま上書き)
             blendDesc.RenderTarget[0].BlendEnable = FALSE;
             break;
         case kBlendModeNormal:
-            // 通常αブレンド (半透明)
             blendDesc.RenderTarget[0].BlendEnable = TRUE;
             blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
             blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -139,7 +140,6 @@ void GraphicsPipeline::Initialize(ID3D12Device* device) {
             blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
             break;
         case kBlendModeAdd:
-            // 加算ブレンド (発光表現)
             blendDesc.RenderTarget[0].BlendEnable = TRUE;
             blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
             blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -149,7 +149,6 @@ void GraphicsPipeline::Initialize(ID3D12Device* device) {
             blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
             break;
         case kBlendModeSubtract:
-            // 減算ブレンド
             blendDesc.RenderTarget[0].BlendEnable = TRUE;
             blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
             blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -159,7 +158,6 @@ void GraphicsPipeline::Initialize(ID3D12Device* device) {
             blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
             break;
         case kBlendModeMultiply:
-            // 乗算ブレンド
             blendDesc.RenderTarget[0].BlendEnable = TRUE;
             blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
             blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ZERO;
@@ -168,14 +166,11 @@ void GraphicsPipeline::Initialize(ID3D12Device* device) {
             blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
             blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
             break;
-            // === 追加: アルファクリッピング用のケース ===
         case kBlendModeAlphaClip:
-            // シェーダーでdiscardするのでブレンドは不要
             blendDesc.RenderTarget[0].BlendEnable = FALSE;
             break;
         }
 
-        // PSOディスクリプタ
         D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc{};
         graphicsPipelineStateDesc.pRootSignature = rootSignature_.Get();
         graphicsPipelineStateDesc.InputLayout = inputLayoutDesc;
