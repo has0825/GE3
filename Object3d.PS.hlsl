@@ -26,6 +26,17 @@ PixelShaderOutput main(VertexShaderOutput input)
     float32_t4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
     
     
+    // === ▼▼▼ ここからが変更箇所 ▼▼▼ ===
+    // テクスチャのRGB値がすべて0.1f未満（ほぼ黒）の場合、そのピクセルを描画せずに破棄する
+    // これにより、黒い部分が透過しているように見える
+    // この閾値(0.1f)は、必要に応じて調整してください
+    if (textureColor.r < 0.1f && textureColor.g < 0.1f && textureColor.b < 0.1f)
+    {
+        discard;
+    }
+    // === ▲▲▲ ここまでが変更箇所 ▲▲▲ ===
+
+
     if (gMaterial.enableLighting != 0)//Lightingする場合
     {
         // Half Lambert の計算

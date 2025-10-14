@@ -8,12 +8,13 @@
 
 // ブレンドモードの定義
 enum BlendMode {
-    kBlendModeNone,         // ブレンドなし
-    kBlendModeNormal,       // 通常αブレンド
-    kBlendModeAdd,          // 加算
-    kBlendModeSubtract,     // 減算
-    kBlendModeMultiply,     // 乗算
-    kCountOfBlendMode,      // カウント用
+    kBlendModeNone,       // ブレンドなし
+    kBlendModeNormal,     // 通常αブレンド
+    kBlendModeAdd,        // 加算
+    kBlendModeSubtract,   // 減算
+    kBlendModeMultiply,   // 乗算
+    kBlendModeAlphaClip,  // === 追加: アルファクリッピング用 ===
+    kCountOfBlendMode,    // カウント用
 };
 
 

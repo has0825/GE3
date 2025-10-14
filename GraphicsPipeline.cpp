@@ -168,6 +168,11 @@ void GraphicsPipeline::Initialize(ID3D12Device* device) {
             blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
             blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
             break;
+            // === 追加: アルファクリッピング用のケース ===
+        case kBlendModeAlphaClip:
+            // シェーダーでdiscardするのでブレンドは不要
+            blendDesc.RenderTarget[0].BlendEnable = FALSE;
+            break;
         }
 
         // PSOディスクリプタ

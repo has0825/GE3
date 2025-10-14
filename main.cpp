@@ -121,6 +121,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	Model* model = Model::Create("resources", "Plane.obj", device);
 
+	Model* fenceModel = Model::Create("resources/fence", "fence.obj", device);
+	fenceModel->transform.translate = { 0.0f, 0.0f, 20.0f };
+	fenceModel->transform.scale = { 10.0f, 10.0f, 10.0f };
+	fenceModel->transform.rotate = { 0.0f, (float)M_PI, 0.0f };
+
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap = CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
 
 	DirectX::ScratchImage mipImages = LoadTexture("resources/uvChecker.png");
@@ -133,6 +138,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	const DirectX::TexMetadata& metadata2 = mipImages2.GetMetadata();
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource2 = CreateTextureResource(device, metadata2);
 	Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource2 = UploadTextureData(textureResource2.Get(), mipImages2, device, commandList);
+
+	std::string fenceTexturePath = "resources/fence/fence.png";
+	DirectX::ScratchImage mipImagesFence = LoadTexture(fenceTexturePath);
+	const DirectX::TexMetadata& metadataFence = mipImagesFence.GetMetadata();
+	Microsoft::WRL::ComPtr<ID3D12Resource> textureResourceFence = CreateTextureResource(device, metadataFence);
+	Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResourceFence = UploadTextureData(textureResourceFence.Get(), mipImagesFence, device, commandList);
 
 	const uint32_t descriptorSizeSRV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
@@ -151,6 +162,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2 = GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 2);
 	device->CreateShaderResourceView(textureResource.Get(), &srvDesc, textureSrvHandleCPU);
 	device->CreateShaderResourceView(textureResource2.Get(), &srvDesc2, textureSrvHandleCPU2);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDescFence{};
+	srvDescFence.Format = metadataFence.format;
+	srvDescFence.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDescFence.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDescFence.Texture2D.MipLevels = UINT(metadataFence.mipLevels);
+	D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPUFence = GetCPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 3);
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPUFence = GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 3);
+	device->CreateShaderResourceView(textureResourceFence.Get(), &srvDescFence, textureSrvHandleCPUFence);
+
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResourceSprite = CreateBufferResource(device, sizeof(VertexData) * 4);
 	VertexData* vertexDataSprite = nullptr;
@@ -196,7 +217,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	CameraForGpu* cameraForGpuData = nullptr;
 	cameraForGpuResource->Map(0, nullptr, reinterpret_cast<void**>(&cameraForGpuData));
 
-	Transform cameraTransform{ { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -5.0f } };
+	Transform cameraTransform{ { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -15.0f } };
 	Transform transformSprite{ { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
 	Transform uvTransformSprite{ { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
 	bool useMonstarBall = true;
@@ -219,11 +240,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		ImGui::NewFrame();
 		ImGui::ShowDemoWindow();
 		ImGui::Begin("Controls");
-		ImGui::SliderFloat3("Scale", &model->transform.scale.x, 0.1f, 5.0f);
-		ImGui::SliderAngle("RotateX", &model->transform.rotate.x, -180.0f, 180.0f);
-		ImGui::SliderAngle("RotateY", &model->transform.rotate.y, -180.0f, 180.0f);
-		ImGui::SliderAngle("RotateZ", &model->transform.rotate.z, -180.0f, 180.0f);
-		ImGui::SliderFloat3("Translate", &model->transform.translate.x, -5.0f, 5.0f);
+		ImGui::SliderFloat3("Scale", &model->transform.scale.x, 0.1f, 50.0f);
+		ImGui::SliderAngle("RotateX", &model->transform.rotate.x, -360.0f, 360.0f);
+		ImGui::SliderAngle("RotateY", &model->transform.rotate.y, -360.0f, 360.0f);
+		ImGui::SliderAngle("RotateZ", &model->transform.rotate.z, -360.0f, 360.0f);
+		ImGui::SliderFloat3("Translate", &model->transform.translate.x, -50.0f, 50.0f);
+
 		ImGui::Checkbox("useMonstarBall", &useMonstarBall);
 		ImGui::SliderFloat3("Light Direction", &directionalLightData->direction.x, -1.0f, 1.0f);
 		ImGui::Text("UVTransform");
@@ -234,6 +256,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		ImGui::DragFloat2("UVScale", &uvTransformSprite.scale.x, 0.01f, -10.0f, 10.0f);
 		ImGui::SliderAngle("UVRotate", &uvTransformSprite.rotate.z);
 		ImGui::SliderFloat3("TranslateSprite", &transformSprite.translate.x, 0.0f, WinApp::kClientWidth);
+		ImGui::Separator();
+		ImGui::Text("Fence Model");
+		ImGui::SliderFloat3("Fence Translate", &fenceModel->transform.translate.x, -70.0f, 70.0f);
+		ImGui::SliderFloat3("Fence Scale", &fenceModel->transform.scale.x, 0.1f, 70.0f);
+		ImGui::SliderAngle("Fence RotateX", &fenceModel->transform.rotate.x, -360.0f, 360.0f);
+		ImGui::SliderAngle("Fence RotateY", &fenceModel->transform.rotate.y, -360.0f, 360.0f);
+		ImGui::SliderAngle("Fence RotateZ", &fenceModel->transform.rotate.z, -360.0f, 360.0f);
 		ImGui::End();
 		ImGui::Render();
 
@@ -260,17 +289,24 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		commandList->SetDescriptorHeaps(1, descriptorHeaps);
 		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		// 共通のCBVをセット
 		commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress());
 		commandList->SetGraphicsRootConstantBufferView(4, cameraForGpuResource->GetGPUVirtualAddress());
 
-		// モデルを描画
+		// Planeモデルを描画 (ブレンドなし)
 		commandList->SetPipelineState(graphicsPipeline->GetPipelineState(kBlendModeNone));
 		model->Draw(
 			commandList,
 			viewProjectionMatrix,
 			directionalLightResource->GetGPUVirtualAddress(),
 			useMonstarBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
+
+		// Fenceモデルを描画 (アルファクリッピング)
+		commandList->SetPipelineState(graphicsPipeline->GetPipelineState(kBlendModeAlphaClip));
+		fenceModel->Draw(
+			commandList,
+			viewProjectionMatrix,
+			directionalLightResource->GetGPUVirtualAddress(),
+			textureSrvHandleGPUFence);
 
 		// スプライトを描画
 		commandList->SetPipelineState(graphicsPipeline->GetPipelineState(static_cast<BlendMode>(spriteBlendMode)));
@@ -291,6 +327,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	ImGui::DestroyContext();
 
 	delete model;
+	delete fenceModel;
 	delete graphicsPipeline;
 
 	dxCommon->Finalize();
